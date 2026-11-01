@@ -1,32 +1,32 @@
-# React + TypeScript + Vite
+# UniNest frontend
 
-This template provides a minimal setup to get React working in Vite with HMR and some Oxlint rules.
+React + TypeScript + Vite frontend for the UniNest student accommodation MVP.
 
-Currently, two official plugins are available:
+## Run locally
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+1. Start the backend and MongoDB as described in [../backend/README.md](../backend/README.md).
+2. From this directory, install dependencies and start Vite:
 
-## React Compiler
+   ```powershell
+   npm install
+   npm run dev
+   ```
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+3. Open the local URL printed by Vite (normally http://localhost:5173).
 
-## Expanding the Oxlint configuration
+The frontend uses `http://127.0.0.1:8000/api/v1` by default. To point it at a different API, set `VITE_API_BASE_URL` in a local `.env` file, for example:
 
-If you are developing a production application, we recommend enabling type-aware lint rules by installing `oxlint-tsgolint` and editing `.oxlintrc.json`:
-
-```json
-{
-  "$schema": "./node_modules/oxlint/configuration_schema.json",
-  "plugins": ["react", "typescript", "oxc"],
-  "options": {
-    "typeAware": true
-  },
-  "rules": {
-    "react/rules-of-hooks": "error",
-    "react/only-export-components": ["warn", { "allowConstantExport": true }]
-  }
-}
+```env
+VITE_API_BASE_URL=http://127.0.0.1:8000/api/v1
 ```
 
-See the [Oxlint rules documentation](https://oxc.rs/docs/guide/usage/linter/rules) for the full list of rules and categories.
+## MVP flows
+
+- Visitors can search and view available verified listings.
+- Students can create an account, request a booking, review their requests, and cancel pending requests.
+- Owners can define rooms and bookable seats, set monthly rent per seat, manage listings, and approve or reject booking requests.
+- Admins can review pending listings and verify or reject them.
+- On approval, UniNest assigns the first available seat for the requested dates. Pending requests do not hold seats.
+- Successful sign-in shows a role-specific welcome popup for students, owners, and admins.
+
+Admin accounts must be provisioned by the backend operator; public registration only supports student and owner accounts. Booking approval is not an online payment or a tenancy guarantee.

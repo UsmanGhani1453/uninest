@@ -1,7 +1,15 @@
 from datetime import datetime, timezone
 from typing import Literal
+from uuid import uuid4
+
 from beanie import Document
-from pydantic import Field
+from pydantic import BaseModel, Field
+
+
+class ListingRoom(BaseModel):
+    id: str = Field(default_factory=lambda: uuid4().hex)
+    name: str = Field(min_length=1, max_length=80)
+    seat_count: int = Field(ge=1, le=100)
 
 
 class Listing(Document):
@@ -19,8 +27,14 @@ class Listing(Document):
     bedrooms: int = Field(default=1, ge=1)
     bathrooms: int = Field(default=1, ge=1)
     capacity: int = Field(default=1, ge=1)
+    rooms: list[ListingRoom] = Field(default_factory=list)
+    availability_version: int = 0
     owner_id: str
     is_verified: bool = False
+    is_rejected: bool = False
+    verification_note: str | None = None
+    reviewed_by: str | None = None
+    reviewed_at: datetime | None = None
     is_available: bool = True
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 

@@ -29,6 +29,8 @@ Open:
 ## Important
 - Registration accepts `student` and `owner`. Admin role must be provisioned manually; public registration cannot create admins.
 - Listings are hidden from normal search until an admin verifies them.
-- Booking commission is snapshotted at 20% of one month's rent; no real payment is processed.
+- Owners configure the listing's rooms and seat counts; monthly rent and deposit are per seat.
+- Owners assign the first available seat when approving a request. Pending requests do not hold seats, and overlapping approved stays cannot use the same seat.
+- Booking commission is snapshotted at 20% of one month's seat rent; no real payment is processed.
 - OTP, production email, real payments, map/geospatial search, and full moderation workflows are not implemented yet.
 - Before deployment, use a strong random `JWT_SECRET`, restrict CORS, add rate limits and email verification, and configure real payment/email providers.
