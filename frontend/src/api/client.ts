@@ -63,6 +63,18 @@ export type Booking = {
   created_at: string
 }
 
+export type Notification = {
+  id: string
+  event_type: 'booking_requested' | 'booking_approved' | 'booking_rejected' | 'booking_cancelled'
+  title: string
+  message: string
+  booking_id: string
+  listing_id: string
+  is_read: boolean
+  created_at: string
+  read_at: string | null
+}
+
 type RequestOptions = {
   method?: string
   token?: string | null
@@ -111,4 +123,10 @@ export const api = {
   ownerBookings: (token: string) => request<Booking[]>('/bookings/owner', { token }),
   updateBooking: (token: string, id: string, status: 'approved' | 'rejected' | 'cancelled') =>
     request<Booking>(`/bookings/${encodeURIComponent(id)}/status`, { method: 'PATCH', token, body: { status } }),
+  notifications: (token: string) =>
+    request<{ items: Notification[]; unread_count: number }>('/notifications', { token }),
+  markNotificationRead: (token: string, id: string) =>
+    request<Notification>(`/notifications/${encodeURIComponent(id)}/read`, { method: 'PATCH', token }),
+  markAllNotificationsRead: (token: string) =>
+    request<{ updated_count: number }>('/notifications/read-all', { method: 'PATCH', token }),
 }

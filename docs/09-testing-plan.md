@@ -45,7 +45,9 @@ Frontend checks:
 - Students cannot cancel approved bookings on or after move-in, but owners and admins can.
 - Cancellation records its timestamp and actor, and does not process a payment or refund.
 - Students cannot access other users' private booking details.
-- Cancellation follows the agreed policy.
+- Booking requests notify the owner and admins; decisions notify the student; cancellations notify the other booking participants and admins.
+- Users can only list and mark their own notifications as read.
+- Notification reads update unread counts and persist across sessions.
 
 ### Commission and payments
 - Commission tests must match the approved commission base and earning trigger.

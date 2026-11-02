@@ -1,6 +1,6 @@
 from calendar import monthrange
 from datetime import date, datetime, timezone
-from typing import Iterable
+from typing import Iterable, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from beanie import PydanticObjectId
@@ -10,10 +10,49 @@ from app.core.config import settings
 from app.core.dependencies import get_current_user, require_roles
 from app.models.booking import Booking
 from app.models.listing import Listing, ListingRoom
+from app.models.notification import Notification
 from app.models.user import User
 from app.schemas.booking import BookingCreate, BookingStatusUpdate
 
 router = APIRouter(prefix="/bookings", tags=["bookings"])
+
+BOOKING_NOTIFICATION_TITLES = {
+    "booking_requested": "New booking request",
+    "booking_approved": "Booking approved",
+    "booking_rejected": "Booking request declined",
+    "booking_cancelled": "Booking cancelled",
+}
+BookingNotificationEvent = Literal[
+    "booking_requested",
+    "booking_approved",
+    "booking_rejected",
+    "booking_cancelled",
+]
+
+
+async def notify_booking_event(
+    event_type: BookingNotificationEvent,
+    recipient_ids: Iterable[str],
+    booking: Booking,
+    message: str,
+    session,
+) -> None:
+    for recipient_id in set(recipient_ids):
+        if not recipient_id:
+            continue
+        await Notification(
+            recipient_id=recipient_id,
+            event_type=event_type,
+            title=BOOKING_NOTIFICATION_TITLES[event_type],
+            message=message,
+            booking_id=str(booking.id),
+            listing_id=booking.listing_id,
+        ).insert(session=session)
+
+
+async def admin_user_ids(session) -> list[str]:
+    admins = await User.find(User.role == "admin", session=session).to_list()
+    return [str(admin.id) for admin in admins]
 
 
 def stay_end_date(start: date, duration_months: int) -> date:
@@ -73,7 +112,11 @@ def booking_dict(item: Booking) -> dict:
 
 
 @router.post("", status_code=201)
-async def create_booking(payload: BookingCreate, user: User = Depends(require_roles("student"))):
+async def create_booking(
+    payload: BookingCreate,
+    request: Request,
+    user: User = Depends(require_roles("student")),
+):
     if payload.move_in_date < date.today():
         raise HTTPException(status_code=422, detail="Move-in date cannot be in the past")
     if not PydanticObjectId.is_valid(payload.listing_id):
@@ -114,7 +157,28 @@ async def create_booking(payload: BookingCreate, user: User = Depends(require_ro
         commission_amount_snapshot=round(listing.rent_per_month * rate, 2),
         student_message=payload.student_message,
     )
-    await item.insert()
+    try:
+        async with await request.app.state.mongo_client.start_session() as mongo_session:
+            async with mongo_session.start_transaction():
+                await item.insert(session=mongo_session)
+                admins = await admin_user_ids(mongo_session)
+                recipients = [listing.owner_id, *admins]
+                message = (
+                    f"A student requested a seat at {listing.title} for "
+                    f"{item.move_in_date.isoformat()}."
+                )
+                await notify_booking_event(
+                    "booking_requested",
+                    recipients,
+                    item,
+                    message,
+                    mongo_session,
+                )
+    except PyMongoError as error:
+        raise HTTPException(
+            status_code=503,
+            detail="Could not save this booking request and its notifications. Please retry.",
+        ) from error
     return booking_dict(item)
 
 
@@ -156,6 +220,7 @@ async def update_booking_status(
                 item = await Booking.get(booking_id, session=mongo_session)
                 if not item:
                     raise HTTPException(status_code=404, detail="Booking not found")
+                previous_status = item.status
 
                 if item.status == "pending":
                     if payload.status == "cancelled":
@@ -281,6 +346,36 @@ async def update_booking_status(
                     item.cancelled_at = datetime.now(timezone.utc)
                     item.cancelled_by = str(user.id)
                 await item.save(session=mongo_session)
+                if item.status != previous_status:
+                    listing = await Listing.get(item.listing_id, session=mongo_session)
+                    listing_title = listing.title if listing else "the property"
+                    admins = [] if is_admin else await admin_user_ids(mongo_session)
+                    if item.status == "approved":
+                        event_type = "booking_approved"
+                        recipients = [item.student_id, *admins]
+                        message = f"Your booking at {listing_title} was approved."
+                    elif item.status == "rejected":
+                        event_type = "booking_rejected"
+                        recipients = [item.student_id, *admins]
+                        message = item.resolution_note or f"Your booking request at {listing_title} was declined."
+                    else:
+                        event_type = "booking_cancelled"
+                        if is_admin:
+                            recipients = [item.student_id, item.owner_id]
+                            message = f"An administrator cancelled the booking at {listing_title}."
+                        elif is_student:
+                            recipients = [item.owner_id, *admins]
+                            message = f"A student cancelled their booking request at {listing_title}."
+                        else:
+                            recipients = [item.student_id, *admins]
+                            message = f"The owner cancelled the booking at {listing_title}."
+                    await notify_booking_event(
+                        event_type,
+                        recipients,
+                        item,
+                        message,
+                        mongo_session,
+                    )
     except PyMongoError as error:
         raise HTTPException(
             status_code=503,

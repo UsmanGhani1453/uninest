@@ -27,6 +27,7 @@ VITE_API_BASE_URL=http://127.0.0.1:8000/api/v1
 - Owners can define rooms and bookable seats, set monthly rent per seat, manage listings, and approve or reject booking requests.
 - Admins can review pending listings and verify or reject them.
 - On approval, UniNest assigns the first available seat for the requested dates. Pending requests do not hold seats.
+- Booking requests, approvals, rejections, and cancellations appear in the signed-in user's notification panel, with unread counts and read controls.
 - Successful sign-in shows a role-specific welcome popup for students, owners, and admins.
 
 Admin accounts must be provisioned by the backend operator; public registration only supports student and owner accounts. Booking approval is not an online payment or a tenancy guarantee.

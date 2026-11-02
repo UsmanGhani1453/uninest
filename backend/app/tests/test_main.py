@@ -323,6 +323,43 @@ def test_booking_request_snapshot_permissions_and_status_transitions():
             25000 * settings.BOOKING_COMMISSION_RATE, 2
         )
 
+        owner_notifications = client.get(
+            "/api/v1/notifications",
+            headers={"Authorization": f"Bearer {owner_token}"},
+        )
+        assert owner_notifications.status_code == 200, owner_notifications.text
+        assert owner_notifications.json()["unread_count"] == 1
+        request_notification = owner_notifications.json()["items"][0]
+        assert request_notification["event_type"] == "booking_requested"
+        assert request_notification["booking_id"] == first_data["id"]
+
+        student_notifications = client.get(
+            "/api/v1/notifications",
+            headers={"Authorization": f"Bearer {student_token}"},
+        )
+        assert student_notifications.status_code == 200
+        assert student_notifications.json() == {"items": [], "unread_count": 0}
+
+        another_user_cannot_read_notification = client.patch(
+            f"/api/v1/notifications/{request_notification['id']}/read",
+            headers={"Authorization": f"Bearer {student_token}"},
+        )
+        assert another_user_cannot_read_notification.status_code == 404
+
+        mark_read = client.patch(
+            f"/api/v1/notifications/{request_notification['id']}/read",
+            headers={"Authorization": f"Bearer {owner_token}"},
+        )
+        assert mark_read.status_code == 200, mark_read.text
+        assert mark_read.json()["is_read"] is True
+        assert mark_read.json()["read_at"]
+
+        owner_notification_state = client.get(
+            "/api/v1/notifications",
+            headers={"Authorization": f"Bearer {owner_token}"},
+        )
+        assert owner_notification_state.json()["unread_count"] == 0
+
         second_booking = client.post(
             "/api/v1/bookings",
             json=booking_payload,
@@ -374,6 +411,15 @@ def test_booking_request_snapshot_permissions_and_status_transitions():
         assert approve.json()["room_name"] == "Room 1"
         assert approve.json()["seat_number"] == 1
 
+        approval_notifications = client.get(
+            "/api/v1/notifications",
+            headers={"Authorization": f"Bearer {student_token}"},
+        )
+        assert approval_notifications.status_code == 200
+        assert approval_notifications.json()["unread_count"] == 1
+        assert approval_notifications.json()["items"][0]["event_type"] == "booking_approved"
+        assert approval_notifications.json()["items"][0]["booking_id"] == first_data["id"]
+
         cannot_reapprove = client.patch(
             f"/api/v1/bookings/{first_data['id']}/status",
             json={"status": "rejected"},
@@ -388,6 +434,27 @@ def test_booking_request_snapshot_permissions_and_status_transitions():
         )
         assert student_cancel.status_code == 200, student_cancel.text
         assert student_cancel.json()["status"] == "cancelled"
+
+        cancellation_notifications = client.get(
+            "/api/v1/notifications",
+            headers={"Authorization": f"Bearer {owner_token}"},
+        )
+        assert cancellation_notifications.status_code == 200
+        assert cancellation_notifications.json()["items"][0]["event_type"] == "booking_cancelled"
+        assert cancellation_notifications.json()["items"][0]["booking_id"] == second_id
+        assert cancellation_notifications.json()["unread_count"] >= 1
+
+        mark_all_read = client.patch(
+            "/api/v1/notifications/read-all",
+            headers={"Authorization": f"Bearer {owner_token}"},
+        )
+        assert mark_all_read.status_code == 200, mark_all_read.text
+        assert mark_all_read.json()["updated_count"] == cancellation_notifications.json()["unread_count"]
+        read_all_state = client.get(
+            "/api/v1/notifications",
+            headers={"Authorization": f"Bearer {owner_token}"},
+        )
+        assert read_all_state.json()["unread_count"] == 0
 
         second_approve = client.patch(
             f"/api/v1/bookings/{third_booking.json()['id']}/status",
@@ -413,6 +480,17 @@ def test_booking_request_snapshot_permissions_and_status_transitions():
         assert seat_taken_during_review.status_code == 200
         assert seat_taken_during_review.json()["status"] == "rejected"
         assert "No seats remain available" in seat_taken_during_review.json()["resolution_note"]
+
+        rejection_notifications = client.get(
+            "/api/v1/notifications",
+            headers={"Authorization": f"Bearer {student_token}"},
+        )
+        assert rejection_notifications.status_code == 200
+        assert any(
+            item["event_type"] == "booking_rejected"
+            and item["booking_id"] == fourth_booking.json()["id"]
+            for item in rejection_notifications.json()["items"]
+        )
 
         no_seats = client.post(
             "/api/v1/bookings",

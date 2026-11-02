@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import type { FormEvent } from 'react'
 import { api } from './api/client'
-import type { Booking, Listing, User } from './api/client'
+import type { Booking, Listing, Notification, User } from './api/client'
 import './App.css'
 
 type Page = 'browse' | 'detail' | 'auth' | 'owner' | 'student' | 'admin'
@@ -92,6 +92,9 @@ function App() {
   const [page, setPage] = useState<Page>('browse')
   const [listings, setListings] = useState<Listing[]>([])
   const [bookings, setBookings] = useState<Booking[]>([])
+  const [notifications, setNotifications] = useState<Notification[]>([])
+  const [unreadNotificationCount, setUnreadNotificationCount] = useState(0)
+  const [notificationsOpen, setNotificationsOpen] = useState(false)
   const [selectedListing, setSelectedListing] = useState<Listing | null>(null)
   const [pendingListings, setPendingListings] = useState<Listing[]>([])
   const [search, setSearch] = useState({ q: '', area: '', min_rent: '', max_rent: '', type: '' })
@@ -106,6 +109,32 @@ function App() {
   const [welcomeUser, setWelcomeUser] = useState<User | null>(null)
   const [refreshKey, setRefreshKey] = useState(0)
   const welcomeDialogRef = useRef<HTMLDialogElement>(null)
+
+  useEffect(() => {
+    if (!session) return
+
+    let active = true
+    const loadNotifications = async () => {
+      try {
+        const result = await api.notifications(session.token)
+        if (active) {
+          setNotifications(result.items)
+          setUnreadNotificationCount(result.unread_count)
+        }
+      } catch (notificationError) {
+        if (active) {
+          setError(notificationError instanceof Error ? notificationError.message : 'Unable to load notifications.')
+        }
+      }
+    }
+
+    void loadNotifications()
+    const intervalId = window.setInterval(() => void loadNotifications(), 30_000)
+    return () => {
+      active = false
+      window.clearInterval(intervalId)
+    }
+  }, [session])
 
   useEffect(() => {
     const dialog = welcomeDialogRef.current
@@ -173,6 +202,8 @@ function App() {
   function signOut() {
     localStorage.removeItem('uninest.session')
     setSession(null)
+    setNotifications([])
+    setUnreadNotificationCount(0)
     setWelcomeUser(null)
     setBookings([])
     goTo('browse')
@@ -328,6 +359,37 @@ function App() {
     }
   }
 
+  async function markNotificationRead(notification: Notification) {
+    if (!session || notification.is_read) return
+    try {
+      const updated = await api.markNotificationRead(session.token, notification.id)
+      setNotifications((current) => current.map((item) => item.id === updated.id ? updated : item))
+      setUnreadNotificationCount((count) => Math.max(0, count - 1))
+    } catch (notificationError) {
+      setError(notificationError instanceof Error ? notificationError.message : 'Unable to update this notification.')
+    }
+  }
+
+  async function markAllNotificationsRead() {
+    if (!session || unreadNotificationCount === 0) return
+    try {
+      await api.markAllNotificationsRead(session.token)
+      const readAt = new Date().toISOString()
+      setNotifications((current) => current.map((item) => (
+        item.is_read ? item : { ...item, is_read: true, read_at: readAt }
+      )))
+      setUnreadNotificationCount(0)
+    } catch (notificationError) {
+      setError(notificationError instanceof Error ? notificationError.message : 'Unable to update notifications.')
+    }
+  }
+
+  async function openNotification(notification: Notification) {
+    await markNotificationRead(notification)
+    setNotificationsOpen(false)
+    goTo(session?.user.role === 'student' ? 'student' : session?.user.role === 'owner' ? 'owner' : 'admin')
+  }
+
   function startEditing(listing: Listing) {
     setEditingListing(listing)
     setListingForm(listingToForm(listing))
@@ -362,7 +424,41 @@ function App() {
       </nav>
       <div className="account-actions">
         {session
-          ? <><span className="user-greeting">Hi, {session.user.full_name.split(' ')[0]}</span><button className="button button-outline button-small" onClick={signOut}>Sign out</button></>
+          ? <>
+            <span className="user-greeting">Hi, {session.user.full_name.split(' ')[0]}</span>
+            <div className="notification-menu">
+              <button
+                className="button button-outline button-small notification-toggle"
+                aria-expanded={notificationsOpen}
+                aria-controls="notification-panel"
+                onClick={() => setNotificationsOpen((open) => !open)}
+              >
+                <span aria-hidden="true">🔔</span> Notifications
+                {unreadNotificationCount > 0 && <span className="notification-count">{unreadNotificationCount > 99 ? '99+' : unreadNotificationCount}</span>}
+              </button>
+              {notificationsOpen && <section className="notification-panel" id="notification-panel" aria-label="Notifications">
+                <div className="notification-panel-heading">
+                  <strong>Notifications</strong>
+                  {unreadNotificationCount > 0 && <button className="text-button" onClick={() => void markAllNotificationsRead()}>Mark all read</button>}
+                </div>
+                {notifications.length === 0
+                  ? <p className="notification-empty">You’re all caught up.</p>
+                  : <div className="notification-list">{notifications.map((notification) => (
+                    <button
+                      type="button"
+                      key={notification.id}
+                      className={`notification-item${notification.is_read ? '' : ' notification-unread'}`}
+                      onClick={() => void openNotification(notification)}
+                    >
+                      <span className="notification-item-title">{notification.title}</span>
+                      <span>{notification.message}</span>
+                      <time dateTime={notification.created_at}>{new Date(notification.created_at).toLocaleString()}</time>
+                    </button>
+                  ))}</div>}
+              </section>}
+            </div>
+            <button className="button button-outline button-small" onClick={signOut}>Sign out</button>
+          </>
           : <button className="button button-outline button-small" onClick={() => goTo('auth')}>Sign in</button>}
       </div>
     </header>

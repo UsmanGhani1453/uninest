@@ -14,7 +14,7 @@ Still to decide after the MVP:
 - How are amounts rounded and reconciled?
 
 ### 2. Booking confirmation and seat inventory
-**MVP rule:** A student submits a booking request; the listing owner may approve or reject a pending request. The student may cancel a pending request. Resolved requests cannot be changed in the MVP.
+**MVP rule:** A student submits a booking request; the listing owner may approve or reject a pending request. Cancellation follows the role and timing policy below.
 - Approval records the owner's decision; it does not collect payment or guarantee a tenancy.
 - Owners configure rooms and the number of bookable seats in each room. Rent and deposit are monthly per seat across the listing.
 - Pending requests do not reserve seats. At approval, UniNest assigns the first available seat in the listing's rooms.
@@ -24,6 +24,8 @@ Still to decide after the MVP:
 - Students can cancel pending requests at any time and approved bookings only before the move-in date. On or after move-in, only the property owner or an admin can cancel an approved booking.
 - Cancelling an approved booking releases its assigned seat for the requested dates. Cancellation is recorded with its timestamp and cancelling user's ID.
 - Cancellation does not trigger a payment, refund, or commission settlement; the MVP does not process payments.
+- Booking requests, approvals, rejections, and cancellations create persistent in-app notifications for the relevant student, owner, and administrators. Users can see their latest 50 notifications, unread counts, and mark notifications read.
+- In-app notifications are polled while signed in; they are not real-time push or email notifications.
 - No pending-request expiry is implemented in the MVP.
 
 ### 3. Payment and settlement

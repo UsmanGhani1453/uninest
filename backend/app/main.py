@@ -8,8 +8,8 @@ from fastapi.staticfiles import StaticFiles
 from motor.motor_asyncio import AsyncIOMotorClient
 
 from app.core.config import settings
-from app.models import Booking, Listing, Review, User
-from app.routers import admin, auth, bookings, listings, reviews
+from app.models import Booking, Listing, Notification, Review, User
+from app.routers import admin, auth, bookings, listings, notifications, reviews
 
 UPLOAD_PATH = Path(settings.UPLOAD_DIR)
 UPLOAD_PATH.mkdir(parents=True, exist_ok=True)
@@ -21,7 +21,7 @@ async def lifespan(app: FastAPI):
     await client.admin.command("ping")
     await init_beanie(
         database=client[settings.DATABASE_NAME],
-        document_models=[User, Listing, Booking, Review],
+        document_models=[User, Listing, Booking, Review, Notification],
     )
     app.state.mongo_client = client
     yield
@@ -41,6 +41,7 @@ app.mount("/uploads", StaticFiles(directory=str(UPLOAD_PATH)), name="uploads")
 app.include_router(auth.router, prefix=settings.API_V1_PREFIX)
 app.include_router(listings.router, prefix=settings.API_V1_PREFIX)
 app.include_router(bookings.router, prefix=settings.API_V1_PREFIX)
+app.include_router(notifications.router, prefix=settings.API_V1_PREFIX)
 app.include_router(reviews.router, prefix=settings.API_V1_PREFIX)
 app.include_router(admin.router, prefix=settings.API_V1_PREFIX)
 
