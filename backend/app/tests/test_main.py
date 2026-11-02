@@ -443,7 +443,7 @@ def test_booking_request_snapshot_permissions_and_status_transitions():
         student_cancel_approved = client.patch(
             f"/api/v1/bookings/{later_booking.json()['id']}/status",
             json={"status": "cancelled"},
-            headers={"Authorization": f"******"},
+            headers={"Authorization": f"Bearer {student_token}"},
         )
         assert student_cancel_approved.status_code == 200, student_cancel_approved.text
         assert student_cancel_approved.json()["status"] == "cancelled"
@@ -456,13 +456,13 @@ def test_booking_request_snapshot_permissions_and_status_transitions():
                 **booking_payload,
                 "move_in_date": (date.today() + timedelta(days=240)).isoformat(),
             },
-            headers={"Authorization": f"******"},
+            headers={"Authorization": f"Bearer {student_token}"},
         )
         assert replacement_booking.status_code == 201, replacement_booking.text
         replacement_approval = client.patch(
             f"/api/v1/bookings/{replacement_booking.json()['id']}/status",
             json={"status": "approved"},
-            headers={"Authorization": f"******"},
+            headers={"Authorization": f"Bearer {owner_token}"},
         )
         assert replacement_approval.status_code == 200, replacement_approval.text
         assert replacement_approval.json()["room_name"] == "Room 1"
@@ -472,7 +472,7 @@ def test_booking_request_snapshot_permissions_and_status_transitions():
             owner_cancel = client.patch(
                 f"/api/v1/bookings/{approved_booking_id}/status",
                 json={"status": "cancelled"},
-                headers={"Authorization": f"******"},
+                headers={"Authorization": f"Bearer {owner_token}"},
             )
             assert owner_cancel.status_code == 200, owner_cancel.text
 
@@ -483,26 +483,26 @@ def test_booking_request_snapshot_permissions_and_status_transitions():
                 "move_in_date": date.today().isoformat(),
                 "duration_months": 1,
             },
-            headers={"Authorization": f"******"},
+            headers={"Authorization": f"Bearer {student_token}"},
         )
         assert move_in_today_booking.status_code == 201, move_in_today_booking.text
         move_in_today_approval = client.patch(
             f"/api/v1/bookings/{move_in_today_booking.json()['id']}/status",
             json={"status": "approved"},
-            headers={"Authorization": f"******"},
+            headers={"Authorization": f"Bearer {owner_token}"},
         )
         assert move_in_today_approval.status_code == 200, move_in_today_approval.text
 
         student_cancel_after_move_in = client.patch(
             f"/api/v1/bookings/{move_in_today_booking.json()['id']}/status",
             json={"status": "cancelled"},
-            headers={"Authorization": f"******"},
+            headers={"Authorization": f"Bearer {student_token}"},
         )
         assert student_cancel_after_move_in.status_code == 403
         owner_cancel_after_move_in = client.patch(
             f"/api/v1/bookings/{move_in_today_booking.json()['id']}/status",
             json={"status": "cancelled"},
-            headers={"Authorization": f"******"},
+            headers={"Authorization": f"Bearer {owner_token}"},
         )
         assert owner_cancel_after_move_in.status_code == 200, owner_cancel_after_move_in.text
         assert owner_cancel_after_move_in.json()["status"] == "cancelled"
@@ -514,13 +514,13 @@ def test_booking_request_snapshot_permissions_and_status_transitions():
                 "move_in_date": date.today().isoformat(),
                 "duration_months": 1,
             },
-            headers={"Authorization": f"******"},
+            headers={"Authorization": f"Bearer {student_token}"},
         )
         assert admin_cancel_booking.status_code == 201, admin_cancel_booking.text
         admin_cancel_approval = client.patch(
             f"/api/v1/bookings/{admin_cancel_booking.json()['id']}/status",
             json={"status": "approved"},
-            headers={"Authorization": f"******"},
+            headers={"Authorization": f"Bearer {owner_token}"},
         )
         assert admin_cancel_approval.status_code == 200, admin_cancel_approval.text
         app.dependency_overrides[get_current_user] = lambda: admin
