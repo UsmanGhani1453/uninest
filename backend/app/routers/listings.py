@@ -1,10 +1,12 @@
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
 from beanie import PydanticObjectId
-from app.core.dependencies import get_current_user, require_roles
+from app.core.config import settings
+from app.core.dependencies import require_roles
 from app.models.booking import Booking
 from app.models.listing import Listing, ListingRoom
 from app.models.user import User
 from app.schemas.listing import ListingCreate, ListingUpdate, ListingResponse
+from app.services.storage import save_image
 
 router = APIRouter(prefix="/listings", tags=["listings"])
 
@@ -69,6 +71,14 @@ async def search_listings(
 async def my_listings(user: User = Depends(require_roles("owner", "admin"))):
     items = await Listing.find(Listing.owner_id == str(user.id)).sort(-Listing.created_at).to_list()
     return [to_response(x) for x in items]
+
+
+@router.post("/images", status_code=201)
+async def upload_listing_image(
+    file: UploadFile = File(...),
+    user: User = Depends(require_roles("owner", "admin")),
+):
+    return {"url": await save_image(file, settings.UPLOAD_DIR)}
 
 
 @router.get("/{listing_id}", response_model=ListingResponse)

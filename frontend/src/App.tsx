@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import type { FormEvent } from 'react'
-import { api } from './api/client'
+import { api, listingImageUrl } from './api/client'
 import type { Booking, Listing, Notification, User } from './api/client'
 import './App.css'
 
@@ -16,7 +16,7 @@ type ListingForm = {
   area: string
   university_names: string
   amenities: string
-  image_urls: string
+  image_urls: string[]
   bathrooms: string
   rooms: Array<{ id?: string; name: string; seat_count: string }>
 }
@@ -33,7 +33,7 @@ const emptyListingForm: ListingForm = {
   area: '',
   university_names: '',
   amenities: '',
-  image_urls: '',
+  image_urls: [],
   bathrooms: '1',
   rooms: [{ name: 'Room 1', seat_count: '2' }],
 }
@@ -79,7 +79,7 @@ function listingToForm(listing: Listing): ListingForm {
     area: listing.area,
     university_names: listing.university_names.join(', '),
     amenities: listing.amenities.join(', '),
-    image_urls: listing.image_urls.join(', '),
+    image_urls: listing.image_urls,
     bathrooms: String(listing.bathrooms),
     rooms: listing.rooms?.length
       ? listing.rooms.map((room) => ({ id: room.id, name: room.name, seat_count: String(room.seat_count) }))
@@ -100,6 +100,7 @@ function App() {
   const [search, setSearch] = useState({ q: '', area: '', min_rent: '', max_rent: '', type: '' })
   const [appliedSearch, setAppliedSearch] = useState(search)
   const [listingForm, setListingForm] = useState<ListingForm>(emptyListingForm)
+  const [newImages, setNewImages] = useState<File[]>([])
   const [editingListing, setEditingListing] = useState<Listing | null>(null)
   const [authMode, setAuthMode] = useState<'login' | 'register'>('login')
   const [authRole, setAuthRole] = useState<'student' | 'owner'>('student')
@@ -239,28 +240,31 @@ function App() {
   async function submitListing(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     if (!session) return
-    const payload = {
-      title: listingForm.title,
-      description: listingForm.description,
-      accommodation_type: listingForm.accommodation_type,
-      rent_per_month: Number(listingForm.rent_per_month),
-      security_deposit: Number(listingForm.security_deposit || 0),
-      address: listingForm.address,
-      area: listingForm.area,
-      city: 'Lahore',
-      university_names: splitList(listingForm.university_names),
-      amenities: splitList(listingForm.amenities),
-      image_urls: splitList(listingForm.image_urls),
-      bathrooms: Number(listingForm.bathrooms),
-      rooms: listingForm.rooms.map((room) => ({
-        ...(room.id ? { id: room.id } : {}),
-        name: room.name,
-        seat_count: Number(room.seat_count),
-      })),
-    }
     setLoading(true)
     setError('')
     try {
+      const uploadedImageUrls = await Promise.all(
+        newImages.map((file) => api.uploadListingImage(session.token, file)),
+      )
+      const payload = {
+        title: listingForm.title,
+        description: listingForm.description,
+        accommodation_type: listingForm.accommodation_type,
+        rent_per_month: Number(listingForm.rent_per_month),
+        security_deposit: Number(listingForm.security_deposit || 0),
+        address: listingForm.address,
+        area: listingForm.area,
+        city: 'Lahore',
+        university_names: splitList(listingForm.university_names),
+        amenities: splitList(listingForm.amenities),
+        image_urls: [...listingForm.image_urls, ...uploadedImageUrls],
+        bathrooms: Number(listingForm.bathrooms),
+        rooms: listingForm.rooms.map((room) => ({
+          ...(room.id ? { id: room.id } : {}),
+          name: room.name,
+          seat_count: Number(room.seat_count),
+        })),
+      }
       if (editingListing) {
         await api.updateListing(session.token, editingListing.id, payload)
         setNotice('Listing updated and sent for admin review.')
@@ -269,6 +273,7 @@ function App() {
         setNotice('Listing submitted. It will be public after admin verification.')
       }
       setListingForm(emptyListingForm)
+      setNewImages([])
       setEditingListing(null)
       setRefreshKey((value) => value + 1)
     } catch (saveError) {
@@ -393,7 +398,22 @@ function App() {
   function startEditing(listing: Listing) {
     setEditingListing(listing)
     setListingForm(listingToForm(listing))
+    setNewImages([])
     window.scrollTo({ top: 0, behavior: 'smooth' })
+  }
+
+  function selectListingImages(files: FileList | null) {
+    if (!files) return
+    const selected = Array.from(files)
+    const invalidFile = selected.find((file) =>
+      !['image/jpeg', 'image/png', 'image/webp'].includes(file.type) || file.size > 5 * 1024 * 1024,
+    )
+    if (invalidFile) {
+      setError('Choose JPEG, PNG, or WebP images that are 5 MB or smaller.')
+      return
+    }
+    setError('')
+    setNewImages((current) => [...current, ...selected])
   }
 
   function updateRoom(index: number, change: Partial<ListingForm['rooms'][number]>) {
@@ -608,8 +628,12 @@ function App() {
                   </fieldset>
                   <label>Nearby universities <small>Separate multiple values with commas</small><input value={listingForm.university_names} onChange={(event) => setListingForm({ ...listingForm, university_names: event.target.value })} placeholder="UOL, GCU" /></label>
                   <label>Amenities <small>Separate multiple values with commas</small><input value={listingForm.amenities} onChange={(event) => setListingForm({ ...listingForm, amenities: event.target.value })} placeholder="WiFi, laundry, furnished" /></label>
-                  <label>Image URLs <small>Separate multiple URLs with commas</small><input value={listingForm.image_urls} onChange={(event) => setListingForm({ ...listingForm, image_urls: event.target.value })} placeholder="https://..." /></label>
-                  <div className="form-actions"><button className="button button-primary" disabled={loading}>{editingListing ? 'Save changes' : 'Submit for review'}</button>{editingListing && <button className="button button-outline" type="button" onClick={() => { setEditingListing(null); setListingForm(emptyListingForm) }}>Cancel edit</button>}</div>
+                  <label>Property photos <small>Choose JPEG, PNG, or WebP images (5 MB max each)</small><input type="file" accept="image/jpeg,image/png,image/webp" multiple disabled={loading} onChange={(event) => { selectListingImages(event.currentTarget.files); event.currentTarget.value = '' }} /></label>
+                  {(listingForm.image_urls.length > 0 || newImages.length > 0) && <div className="listing-image-previews">
+                    {listingForm.image_urls.map((imageUrl, index) => <div className="listing-image-preview" key={`${imageUrl}-${index}`}><img src={listingImageUrl(imageUrl)} alt={`Property photo ${index + 1}`} /><button className="text-button" type="button" disabled={loading} onClick={() => setListingForm((current) => ({ ...current, image_urls: current.image_urls.filter((_, imageIndex) => imageIndex !== index) }))}>Remove</button></div>)}
+                    {newImages.map((image, index) => <div className="listing-image-file" key={`${image.name}-${image.lastModified}-${index}`}><span>{image.name}</span><button className="text-button" type="button" disabled={loading} onClick={() => setNewImages((current) => current.filter((_, imageIndex) => imageIndex !== index))}>Remove</button></div>)}
+                  </div>}
+                  <div className="form-actions"><button className="button button-primary" disabled={loading}>{loading ? 'Saving…' : editingListing ? 'Save changes' : 'Submit for review'}</button>{editingListing && <button className="button button-outline" type="button" onClick={() => { setEditingListing(null); setListingForm(emptyListingForm); setNewImages([]) }}>Cancel edit</button>}</div>
                   <p className="form-footnote">New or edited listings need admin verification before they appear publicly.</p>
                 </form>
               </section>
@@ -676,7 +700,7 @@ function ListingCover({ listing, detail = false }: { listing: Listing; detail?: 
   const initial = listing.accommodation_type === 'hostel' ? 'H' : listing.accommodation_type === 'room' ? 'R' : 'A'
 
   if (listing.image_urls[0] && !imageFailed) {
-    return <img src={listing.image_urls[0]} alt={listing.title} onError={() => setImageFailed(true)} />
+    return <img src={listingImageUrl(listing.image_urls[0])} alt={listing.title} onError={() => setImageFailed(true)} />
   }
   if (detail) {
     return <div className="detail-placeholder"><span>{listing.accommodation_type}</span><strong>{listing.area}</strong></div>

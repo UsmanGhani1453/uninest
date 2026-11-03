@@ -1208,6 +1208,36 @@
   margin: 0;
 }
 
+.listing-image-previews {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.listing-image-preview,
+.listing-image-file {
+  display: grid;
+  justify-items: start;
+  gap: 5px;
+  min-width: 0;
+  max-width: 140px;
+}
+
+.listing-image-preview img {
+  width: 120px;
+  height: 84px;
+  border-radius: 6px;
+  object-fit: cover;
+}
+
+.listing-image-file span {
+  max-width: 140px;
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 11px;
+  text-overflow: ellipsis;
+}
+
 .room-editor {
   display: grid;
   gap: 12px;

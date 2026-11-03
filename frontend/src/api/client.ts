@@ -1,4 +1,9 @@
 const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL ?? 'http://127.0.0.1:8000/api/v1').replace(/\/$/, '')
+const API_ORIGIN = new URL(API_BASE_URL, window.location.origin).origin
+
+export function listingImageUrl(imageUrl: string) {
+  return new URL(imageUrl, API_ORIGIN).toString()
+}
 
 export type User = {
   id: string
@@ -99,6 +104,22 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
   return response.json() as Promise<T>
 }
 
+async function uploadImage(token: string, file: File): Promise<string> {
+  const formData = new FormData()
+  formData.append('file', file)
+  const response = await fetch(`${API_BASE_URL}/listings/images`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${token}` },
+    body: formData,
+  })
+  if (!response.ok) {
+    const errorBody = await response.json().catch(() => null) as { detail?: string } | null
+    throw new Error(errorBody?.detail ?? `Image upload failed (${response.status})`)
+  }
+  const result = await response.json() as { url: string }
+  return result.url
+}
+
 export const api = {
   register: (data: { full_name: string; email: string; password: string; role: 'student' | 'owner' }) =>
     request<{ access_token: string; user: User }>('/auth/register', { method: 'POST', body: data }),
@@ -110,6 +131,7 @@ export const api = {
   myListings: (token: string) => request<Listing[]>('/listings/mine', { token }),
   createListing: (token: string, data: Record<string, unknown>) =>
     request<Listing>('/listings', { method: 'POST', token, body: data }),
+  uploadListingImage: uploadImage,
   updateListing: (token: string, id: string, data: Record<string, unknown>) =>
     request<Listing>(`/listings/${encodeURIComponent(id)}`, { method: 'PATCH', token, body: data }),
   pendingListings: (token: string) => request<Listing[]>('/admin/listings/pending', { token }),
